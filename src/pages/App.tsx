@@ -1,386 +1,255 @@
 import React, { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { X, Plus, MessageSquare, Link as LinkIcon, Image, Bot, Sparkles, Star, Home, Car, Bike, Smartphone, Laptop, Sofa, CheckCircle, Copy, Send, Upload, Eye, TrendingDown, ExternalLink, MapPin, Clock, ArrowLeft, User, DollarSign } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, MessageSquare, User, Upload, Send, Copy, ArrowLeft, X, CheckCircle, Sparkles, Bot, Link as LinkIcon, Image, Eye } from "lucide-react";
 import { calculateCounterOffer, generateNegotiationMessage } from '../utils/negotiationUtils';
-import BetterDeals from '../components/BetterDeals';
 
-export interface NegotiationTab {
+interface Negotiation {
   id: string;
   title: string;
   category: string;
   platform: string;
   originalPrice: number;
   currentOffer?: number;
-  status: 'active' | 'completed' | 'closed';
-  createdAt: Date;
   tone: string;
   budget: number;
+  status: 'setup' | 'active' | 'completed';
   messages: Array<{
     id: string;
-    type: 'user' | 'ai' | 'seller';
+    type: 'user' | 'ai';
     content: string;
     timestamp: Date;
   }>;
-}
-
-export interface CompletedDeal {
-  id: string;
-  title: string;
-  category: string;
-  platform: string;
-  originalPrice: number;
-  finalPrice: number;
-  savings: number;
-  savingsPercentage: number;
-  completedAt: Date;
-  dealClosed: boolean;
+  createdAt: Date;
 }
 
 const categories = [
-  { id: 'real-estate', name: 'Real Estate', icon: Home, color: 'from-blue-500 to-blue-600' },
-  { id: 'cars', name: 'Cars', icon: Car, color: 'from-red-500 to-red-600' },
-  { id: 'motorcycles', name: 'Motorcycles', icon: Bike, color: 'from-orange-500 to-orange-600' },
-  { id: 'gadgets', name: 'Gadgets', icon: Smartphone, color: 'from-purple-500 to-purple-600' },
-  { id: 'electronics', name: 'Electronics', icon: Laptop, color: 'from-green-500 to-green-600' },
-  { id: 'furniture', name: 'Furniture', icon: Sofa, color: 'from-indigo-500 to-indigo-600' }
+  { id: 'real-estate', name: 'Real Estate', icon: '🏠' },
+  { id: 'cars', name: 'Cars', icon: '🚗' },
+  { id: 'motorcycles', name: 'Motorcycles', icon: '🏍️' },
+  { id: 'gadgets', name: 'Gadgets', icon: '📱' },
+  { id: 'electronics', name: 'Electronics', icon: '💻' },
+  { id: 'furniture', name: 'Furniture', icon: '🪑' }
 ];
 
 const tones = [
-  { id: 'friendly', name: 'Friendly & Casual', description: 'Warm and approachable tone' },
-  { id: 'professional', name: 'Professional', description: 'Business-like and formal' },
-  { id: 'confident', name: 'Confident & Direct', description: 'Assertive but respectful' },
-  { id: 'humble', name: 'Humble & Polite', description: 'Very respectful and modest' }
+  { id: 'friendly', name: 'Friendly', desc: 'Warm and approachable' },
+  { id: 'professional', name: 'Professional', desc: 'Business-like and formal' },
+  { id: 'confident', name: 'Confident', desc: 'Direct and assertive' },
+  { id: 'humble', name: 'Humble', desc: 'Polite and respectful' }
 ];
 
 const AppPage = () => {
-  const [activeTab, setActiveTab] = useState('negotiate');
-  const [activeSubTab, setActiveSubTab] = useState('form');
-  const [negotiationTabs, setNegotiationTabs] = useState<NegotiationTab[]>([]);
-  const [activeNegotiationId, setActiveNegotiationId] = useState<string | null>(null);
-  const [completedDeals, setCompletedDeals] = useState<CompletedDeal[]>([
-    {
-      id: '1',
-      title: '2019 Honda Civic',
-      category: 'cars',
-      platform: 'Facebook Marketplace',
-      originalPrice: 18000,
-      finalPrice: 15500,
-      savings: 2500,
-      savingsPercentage: 14,
-      completedAt: new Date('2024-01-15'),
-      dealClosed: true
-    },
-    {
-      id: '2',
-      title: 'MacBook Pro 13"',
-      category: 'electronics',
-      platform: 'Craigslist',
-      originalPrice: 1200,
-      finalPrice: 950,
-      savings: 250,
-      savingsPercentage: 21,
-      completedAt: new Date('2024-01-10'),
-      dealClosed: true
-    }
-  ]);
+  const [activeTab, setActiveTab] = useState('start');
+  const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
+  const [currentNegotiation, setCurrentNegotiation] = useState<Negotiation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   // Form states
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedTone, setSelectedTone] = useState('');
-  const [userBudget, setUserBudget] = useState('');
-  const [listingTitle, setListingTitle] = useState('');
-  const [listingPrice, setListingPrice] = useState('');
-  const [platform, setPlatform] = useState('');
-  const [extraNotes, setExtraNotes] = useState('');
-  const [generatedOffer, setGeneratedOffer] = useState('');
-  const [generatedMessage, setGeneratedMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    category: '',
+    title: '',
+    price: '',
+    platform: '',
+    tone: 'professional',
+    budget: '',
+    notes: ''
+  });
 
-  // AI Chat states
-  const [aiChatInput, setAiChatInput] = useState('');
-  const [aiChatMessages, setAiChatMessages] = useState<Array<{id: string, type: 'user' | 'ai', content: string, timestamp: Date}>>([]);
-  const [isAiChatLoading, setIsAiChatLoading] = useState(false);
+  // Chat states
+  const [chatMessage, setChatMessage] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   // URL Parser states
   const [url, setUrl] = useState('');
   const [isParsingUrl, setIsParsingUrl] = useState(false);
-  const [urlParsedData, setUrlParsedData] = useState<any>(null);
+  const [parsedData, setParsedData] = useState<any>(null);
 
-  // Image Analyzer states
+  // Image states
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [imageAnalysisResult, setImageAnalysisResult] = useState<any>(null);
-
-  // Dialog states
-  const [showDealDialog, setShowDealDialog] = useState(false);
-  const [closingTabId, setClosingTabId] = useState('');
-  const [dealClosed, setDealClosed] = useState(false);
-  const [finalPrice, setFinalPrice] = useState('');
-
-  const { toast } = useToast();
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
 
   const startNewNegotiation = () => {
-    const newTab: NegotiationTab = {
+    const newNegotiation: Negotiation = {
       id: Date.now().toString(),
       title: '',
       category: '',
       platform: '',
       originalPrice: 0,
-      status: 'active',
-      createdAt: new Date(),
-      tone: '',
+      tone: 'professional',
       budget: 0,
-      messages: []
+      status: 'setup',
+      messages: [],
+      createdAt: new Date()
     };
-    
-    setNegotiationTabs(prev => [...prev, newTab]);
-    setActiveNegotiationId(newTab.id);
+    setCurrentNegotiation(newNegotiation);
     setActiveTab('negotiate');
+  };
+
+  const saveNegotiation = () => {
+    if (!currentNegotiation) return;
     
-    // Reset form states
-    setSelectedCategory('');
-    setSelectedTone('');
-    setUserBudget('');
-    setListingTitle('');
-    setListingPrice('');
-    setPlatform('');
-    setExtraNotes('');
-    setGeneratedOffer('');
-    setGeneratedMessage('');
-    setAiChatMessages([]);
-    
-    toast({
-      title: "New Negotiation Started",
-      description: "Configure your negotiation settings to begin.",
-    });
-  };
+    const updatedNegotiation = {
+      ...currentNegotiation,
+      title: formData.title,
+      category: formData.category,
+      platform: formData.platform,
+      originalPrice: parseFloat(formData.price) || 0,
+      tone: formData.tone,
+      budget: parseFloat(formData.budget) || 0,
+      status: 'active' as const
+    };
 
-  const selectActiveNegotiation = (negotiationId: string) => {
-    setActiveNegotiationId(negotiationId);
-    const negotiation = negotiationTabs.find(n => n.id === negotiationId);
-    if (negotiation) {
-      setSelectedCategory(negotiation.category);
-      setSelectedTone(negotiation.tone);
-      setUserBudget(negotiation.budget.toString());
-      setListingTitle(negotiation.title);
-      setListingPrice(negotiation.originalPrice.toString());
-      setPlatform(negotiation.platform);
-      setAiChatMessages(negotiation.messages);
-    }
-  };
-
-  const updateActiveNegotiation = (updates: Partial<NegotiationTab>) => {
-    if (!activeNegotiationId) return;
-    
-    setNegotiationTabs(prev => prev.map(tab => 
-      tab.id === activeNegotiationId ? { ...tab, ...updates } : tab
-    ));
-  };
-
-  const closeNegotiationTab = (tabId: string) => {
-    setClosingTabId(tabId);
-    setShowDealDialog(true);
-  };
-
-  const handleDealCompletion = () => {
-    const tab = negotiationTabs.find(t => t.id === closingTabId);
-    if (!tab) return;
-
-    if (dealClosed && finalPrice) {
-      const finalPriceNum = parseFloat(finalPrice);
-      if (finalPriceNum && finalPriceNum < tab.originalPrice) {
-        const savings = tab.originalPrice - finalPriceNum;
-        const savingsPercentage = Math.round((savings / tab.originalPrice) * 100);
-        
-        const completedDeal: CompletedDeal = {
-          id: closingTabId,
-          title: tab.title,
-          category: tab.category,
-          platform: tab.platform,
-          originalPrice: tab.originalPrice,
-          finalPrice: finalPriceNum,
-          savings,
-          savingsPercentage,
-          completedAt: new Date(),
-          dealClosed: true
-        };
-        
-        setCompletedDeals(prev => [completedDeal, ...prev]);
-        
-        toast({
-          title: "Deal Completed! 🎉",
-          description: `You saved $${savings} (${savingsPercentage}% off)!`,
-        });
+    setNegotiations(prev => {
+      const existing = prev.find(n => n.id === currentNegotiation.id);
+      if (existing) {
+        return prev.map(n => n.id === currentNegotiation.id ? updatedNegotiation : n);
       }
-    }
-    
-    setNegotiationTabs(prev => prev.filter(t => t.id !== closingTabId));
-    if (activeNegotiationId === closingTabId) {
-      setActiveNegotiationId(null);
-    }
-    setShowDealDialog(false);
-    setClosingTabId('');
-    setDealClosed(false);
-    setFinalPrice('');
+      return [...prev, updatedNegotiation];
+    });
+
+    setCurrentNegotiation(updatedNegotiation);
+    toast({ title: "Negotiation Saved", description: "Your negotiation has been saved successfully." });
   };
 
-  const handleGenerateOffer = async () => {
-    if (!listingTitle || !listingPrice || !platform || !selectedCategory || !selectedTone || !userBudget) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields including tone and budget.",
-        variant: "destructive"
-      });
+  const generateOffer = async () => {
+    if (!formData.title || !formData.price || !formData.category) {
+      toast({ title: "Missing Information", description: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
-    
     try {
-      const price = parseFloat(listingPrice);
-      const budget = parseFloat(userBudget);
+      const price = parseFloat(formData.price);
+      const budget = parseFloat(formData.budget) || price;
       
-      // Ensure offer doesn't exceed budget
-      let calculatedOffer = calculateCounterOffer(price, platform, selectedCategory);
-      if (calculatedOffer > budget) {
-        calculatedOffer = budget;
+      if (price > budget) {
+        toast({ title: "Budget Exceeded", description: "The listing price exceeds your budget.", variant: "destructive" });
+        return;
       }
+
+      const offer = calculateCounterOffer(price, formData.platform, formData.category);
+      const finalOffer = Math.min(offer, budget);
       
       const message = await generateNegotiationMessage(
-        listingTitle, 
-        price, 
-        calculatedOffer, 
-        platform, 
-        extraNotes,
-        selectedCategory,
-        selectedTone
+        formData.title, price, finalOffer, formData.platform, formData.notes, formData.category, formData.tone
       );
-      
-      setGeneratedOffer(calculatedOffer.toString());
-      setGeneratedMessage(message);
-      
-      // Update the active negotiation
-      updateActiveNegotiation({
-        title: listingTitle,
-        category: selectedCategory,
-        platform: platform,
-        originalPrice: price,
-        currentOffer: calculatedOffer,
-        tone: selectedTone,
-        budget: budget
-      });
-      
-      toast({
-        title: "Offer Generated!",
-        description: "Your negotiation strategy is ready to use.",
-      });
+
+      if (currentNegotiation) {
+        const aiMessage = {
+          id: Date.now().toString(),
+          type: 'ai' as const,
+          content: `Suggested offer: $${finalOffer}\n\nMessage: ${message}`,
+          timestamp: new Date()
+        };
+
+        setCurrentNegotiation(prev => prev ? {
+          ...prev,
+          currentOffer: finalOffer,
+          messages: [...prev.messages, aiMessage]
+        } : null);
+      }
+
+      toast({ title: "Offer Generated!", description: "Your negotiation strategy is ready." });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate offer. Please try again.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to generate offer.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAiChatMessage = async () => {
-    if (!aiChatInput.trim()) return;
+  const sendChatMessage = async () => {
+    if (!chatMessage.trim() || !currentNegotiation) return;
 
     const userMessage = {
       id: Date.now().toString(),
       type: 'user' as const,
-      content: aiChatInput,
+      content: chatMessage,
       timestamp: new Date()
     };
 
-    const newMessages = [...aiChatMessages, userMessage];
-    setAiChatMessages(newMessages);
-    setAiChatInput('');
-    setIsAiChatLoading(true);
+    setCurrentNegotiation(prev => prev ? {
+      ...prev,
+      messages: [...prev.messages, userMessage]
+    } : null);
 
-    // Update the active negotiation with new message
-    updateActiveNegotiation({ messages: newMessages });
+    setChatMessage('');
+    setIsChatLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       const aiResponse = {
         id: (Date.now() + 1).toString(),
         type: 'ai' as const,
-        content: "I understand your concern. Based on the market analysis and your budget constraints, I'd suggest adjusting your approach. Would you like me to help you craft a different strategy or modify your current offer?",
+        content: "Based on your question, I recommend being flexible on timing but firm on price. Market data supports your offer range.",
         timestamp: new Date()
       };
 
-      const updatedMessages = [...newMessages, aiResponse];
-      setAiChatMessages(updatedMessages);
-      updateActiveNegotiation({ messages: updatedMessages });
-      
-      toast({
-        title: "AI Response Generated!",
-        description: "Continue the conversation for more insights.",
-      });
+      setCurrentNegotiation(prev => prev ? {
+        ...prev,
+        messages: [...prev.messages, aiResponse]
+      } : null);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to generate AI response.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to get AI response.", variant: "destructive" });
     } finally {
-      setIsAiChatLoading(false);
+      setIsChatLoading(false);
     }
   };
 
-  const handleParseUrl = async () => {
-    if (!url) {
-      toast({
-        title: "URL Required",
-        description: "Please enter a listing URL to parse.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const parseUrl = async () => {
+    if (!url) return;
     setIsParsingUrl(true);
     
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Mock parsed data
-      const parsedData = {
+      const mockData = {
         title: "MacBook Pro 13\" M2 - Like New",
         price: "1200",
         platform: "Facebook Marketplace",
         description: "Barely used, original packaging included"
       };
       
-      setUrlParsedData(parsedData);
+      setParsedData(mockData);
+      setFormData(prev => ({ ...prev, ...mockData }));
       
-      toast({
-        title: "URL Parsed Successfully!",
-        description: "Listing information has been extracted.",
-      });
-      
-      setUrl('');
+      toast({ title: "URL Parsed!", description: "Listing information extracted successfully." });
     } catch (error) {
-      toast({
-        title: "Parsing Failed",
-        description: "Unable to parse the listing URL.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to parse URL.", variant: "destructive" });
     } finally {
       setIsParsingUrl(false);
+    }
+  };
+
+  const analyzeImage = async () => {
+    if (!uploadedImage) return;
+    setIsAnalyzing(true);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      
+      setAnalysisResult({
+        sentiment: 'positive',
+        priceFlexibility: 'high',
+        urgency: 'medium',
+        suggestions: ['Seller seems motivated', 'Good time to negotiate', 'Mention quick pickup']
+      });
+      
+      toast({ title: "Analysis Complete!", description: "Image analyzed successfully." });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to analyze image.", variant: "destructive" });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -388,733 +257,458 @@ const AppPage = () => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setUploadedImage(e.target?.result as string);
-      };
+      reader.onload = (e) => setUploadedImage(e.target?.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const analyzeImage = async () => {
-    if (!uploadedImage || !selectedCategory) {
-      toast({
-        title: "Requirements Missing",
-        description: "Please upload an image and select a category.",
-        variant: "destructive"
-      });
-      return;
-    }
+  const betterDeals = [
+    { title: "Similar MacBook Pro", savings: "$90", platform: "eBay" },
+    { title: "MacBook Air M2", savings: "$150", platform: "Facebook" },
+    { title: "MacBook Pro 14\"", savings: "$200", platform: "Craigslist" }
+  ];
 
-    setIsAnalyzing(true);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      const analysisResult = {
-        sentiment: 'positive',
-        priceFlexibility: 'high',
-        urgencyLevel: 'medium',
-        suggestedOffer: '850',
-        insights: [
-          'Seller seems motivated to sell quickly',
-          'Price appears negotiable based on language used',
-          'Good opportunity for significant savings'
-        ]
-      };
-      
-      setImageAnalysisResult(analysisResult);
-      
-      toast({
-        title: "Analysis Complete!",
-        description: "Conversation analyzed with AI insights.",
-      });
-    } catch (error) {
-      toast({
-        title: "Analysis Failed",
-        description: "Unable to analyze the image.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const totalSavings = completedDeals.reduce((sum, deal) => sum + deal.savings, 0);
-  const totalDeals = completedDeals.length;
-  const averageSavings = totalDeals > 0 ? Math.round(totalSavings / totalDeals) : 1000;
-
-  const activeNegotiation = activeNegotiationId ? negotiationTabs.find(n => n.id === activeNegotiationId) : null;
+  const totalSavings = negotiations.filter(n => n.status === 'completed').reduce((sum, n) => sum + (n.originalPrice - (n.currentOffer || 0)), 0);
+  const activeCount = negotiations.filter(n => n.status === 'active').length;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-purple-800 to-indigo-900 text-white p-6 font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-purple-800 to-indigo-900 text-white p-4">
+      {/* Header */}
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">🧠 Lowbal</h1>
           <p className="text-sm text-gray-300">AI-Powered Negotiation Assistant</p>
         </div>
         <Link to="/account">
-          <button className="bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 rounded-lg shadow-md text-white font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300">
+          <Button className="bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 rounded-lg">
+            <User className="w-4 h-4 mr-2" />
             Account
-          </button>
+          </Button>
         </Link>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-green-600 p-4 rounded-xl shadow-md">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-green-600 p-4 rounded-xl">
           <p className="text-sm text-white/80">Total Saved</p>
           <h2 className="text-2xl font-bold">${totalSavings.toLocaleString()}</h2>
         </div>
-        <div className="bg-green-500 p-4 rounded-xl shadow-md">
-          <p className="text-sm text-white/80">Deals Closed</p>
-          <h2 className="text-2xl font-bold">{totalDeals}</h2>
+        <div className="bg-blue-600 p-4 rounded-xl">
+          <p className="text-sm text-white/80">Active</p>
+          <h2 className="text-2xl font-bold">{activeCount}</h2>
         </div>
-        <div className="bg-green-400 p-4 rounded-xl shadow-md">
-          <p className="text-sm text-white/80">Avg. Savings</p>
-          <h2 className="text-2xl font-bold">${averageSavings}</h2>
+        <div className="bg-purple-600 p-4 rounded-xl">
+          <p className="text-sm text-white/80">Success Rate</p>
+          <h2 className="text-2xl font-bold">78%</h2>
         </div>
-      </section>
+      </div>
 
-      <section className="mb-6 flex items-center gap-4 flex-wrap">
-        <button 
+      {/* Navigation */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        <Button 
+          onClick={() => setActiveTab('start')}
+          variant={activeTab === 'start' ? 'default' : 'outline'}
+          className="font-semibold"
+        >
+          🏠 Start
+        </Button>
+        <Button 
           onClick={() => setActiveTab('negotiate')}
-          className={`px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
-            activeTab === 'negotiate' 
-              ? 'bg-white text-black' 
-              : 'bg-gray-800 text-white/70 hover:bg-gray-700'
-          }`}
+          variant={activeTab === 'negotiate' ? 'default' : 'outline'}
+          className="font-semibold"
         >
-          💬 Negotiations ({negotiationTabs.length})
-        </button>
-        <button 
+          💬 Negotiate
+        </Button>
+        <Button 
+          onClick={() => setActiveTab('active')}
+          variant={activeTab === 'active' ? 'default' : 'outline'}
+          className="font-semibold"
+        >
+          📋 Active ({activeCount})
+        </Button>
+        <Button 
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-            activeTab === 'history' 
-              ? 'bg-white text-black' 
-              : 'bg-gray-800 text-white/70 hover:bg-gray-700'
-          }`}
+          variant={activeTab === 'history' ? 'default' : 'outline'}
+          className="font-semibold"
         >
-          🔁 History
-        </button>
-        <button 
-          onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-            activeTab === 'analytics' 
-              ? 'bg-white text-black' 
-              : 'bg-gray-800 text-white/70 hover:bg-gray-700'
-          }`}
-        >
-          📊 Analytics
-        </button>
-        <button 
-          onClick={startNewNegotiation}
-          className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-4 py-2 rounded-lg font-semibold hover:from-emerald-600 hover:to-cyan-600 transition-all duration-300"
-        >
-          <Plus className="w-4 h-4 mr-2 inline" />
-          Start New Negotiation
-        </button>
-      </section>
+          📊 History
+        </Button>
+      </div>
 
-      {activeTab === 'negotiate' && (
-        <section className="bg-white text-black p-6 rounded-xl shadow-xl">
-          {negotiationTabs.length === 0 ? (
-            <div className="text-center py-12">
-              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h4 className="text-xl font-bold text-gray-700 mb-2">No Active Negotiations</h4>
-              <p className="text-gray-500 mb-6">Start your first negotiation to begin saving money</p>
-              <button
-                onClick={startNewNegotiation}
-                className="bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition-colors"
-              >
-                Start New Negotiation
-              </button>
-            </div>
-          ) : !activeNegotiationId ? (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold">💬 Active Negotiations</h3>
-                <button
-                  onClick={startNewNegotiation}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-2 inline" />
-                  New Negotiation
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {negotiationTabs.map((tab) => (
-                  <div key={tab.id} className="bg-gray-50 p-4 rounded-lg border flex items-center justify-between hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => selectActiveNegotiation(tab.id)}>
-                    <div>
-                      <h4 className="font-bold text-lg">{tab.title || 'New Negotiation'}</h4>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <span>Category: {tab.category || 'Not selected'}</span>
-                        <span>Platform: {tab.platform || 'Not selected'}</span>
-                        {tab.originalPrice > 0 && <span>Price: ${tab.originalPrice.toLocaleString()}</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-100 text-green-700">Active</Badge>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeNegotiationTab(tab.id);
-                        }}
-                        className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex items-center gap-4 mb-6">
-                <button
-                  onClick={() => setActiveNegotiationId(null)}
-                  className="bg-gray-600 text-white p-2 rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <h3 className="text-2xl font-bold">
-                  {activeNegotiation?.title || 'Configure Negotiation'}
-                </h3>
-                <Badge className="bg-blue-100 text-blue-700 font-bold">
-                  {activeNegotiation?.category ? categories.find(c => c.id === activeNegotiation.category)?.name : 'Setup Required'}
-                </Badge>
-              </div>
+      {/* Content */}
+      {activeTab === 'start' && (
+        <Card className="bg-white text-black p-6">
+          <CardHeader>
+            <CardTitle className="text-2xl">Welcome to Lowbal</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <p className="text-lg">Start negotiating smarter with AI-powered strategies.</p>
+            <Button onClick={startNewNegotiation} className="bg-green-600 text-white px-6 py-3 text-lg">
+              <Plus className="w-5 h-5 mr-2" />
+              Start New Negotiation
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-              {!selectedCategory ? (
-                <div className="space-y-6">
-                  <h4 className="text-xl font-bold text-center">Choose Your Category</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    {categories.map((category) => {
-                      const Icon = category.icon;
-                      return (
-                        <Card
-                          key={category.id}
-                          className="cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-105 bg-white border border-gray-200 hover:border-gray-300"
-                          onClick={() => setSelectedCategory(category.id)}
+      {activeTab === 'negotiate' && currentNegotiation && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Button onClick={() => setActiveTab('start')} variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h2 className="text-2xl font-bold">Setup Negotiation</h2>
+          </div>
+
+          <Tabs defaultValue="setup" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 bg-gray-800">
+              <TabsTrigger value="setup">Setup</TabsTrigger>
+              <TabsTrigger value="url">URL Parser</TabsTrigger>
+              <TabsTrigger value="chat">AI Chat</TabsTrigger>
+              <TabsTrigger value="image">Image Analyzer</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="setup">
+              <Card className="bg-white text-black">
+                <CardContent className="p-6 space-y-4">
+                  {/* Category Selection */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Category</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {categories.map(cat => (
+                        <Button
+                          key={cat.id}
+                          onClick={() => setFormData(prev => ({ ...prev, category: cat.id }))}
+                          variant={formData.category === cat.id ? 'default' : 'outline'}
+                          className="text-sm"
                         >
-                          <CardContent className="p-6 text-center">
-                            <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-xl flex items-center justify-center mx-auto mb-3`}>
-                              <Icon className="w-6 h-6 text-white" />
-                            </div>
-                            <h4 className="font-bold text-gray-900 mb-1">{category.name}</h4>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                          {cat.icon} {cat.name}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Tone and Budget Selection */}
-                  <div className="grid md:grid-cols-2 gap-6 p-6 bg-blue-50 rounded-xl border border-blue-200">
-                    <div className="space-y-4">
-                      <Label className="text-lg font-semibold text-blue-800">AI Tone</Label>
-                      <Select value={selectedTone} onValueChange={setSelectedTone}>
-                        <SelectTrigger className="h-12 border-2 border-blue-300 bg-white">
-                          <SelectValue placeholder="Select AI tone" />
+
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Item Title</label>
+                      <Input
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="e.g., MacBook Pro 13\""
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Price ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.price}
+                        onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                        placeholder="1200"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Platform & Tone */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Platform</label>
+                      <Select value={formData.platform} onValueChange={(value) => setFormData(prev => ({ ...prev, platform: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select platform" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
-                          {tones.map((tone) => (
+                        <SelectContent>
+                          <SelectItem value="Facebook Marketplace">Facebook Marketplace</SelectItem>
+                          <SelectItem value="Craigslist">Craigslist</SelectItem>
+                          <SelectItem value="eBay">eBay</SelectItem>
+                          <SelectItem value="Zillow">Zillow</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">AI Tone</label>
+                      <Select value={formData.tone} onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tones.map(tone => (
                             <SelectItem key={tone.id} value={tone.id}>
-                              <div>
-                                <div className="font-medium">{tone.name}</div>
-                                <div className="text-xs text-gray-500">{tone.description}</div>
-                              </div>
+                              {tone.name} - {tone.desc}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-4">
-                      <Label className="text-lg font-semibold text-blue-800">Your Budget ($)</Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                        <Input
-                          type="number"
-                          placeholder="Enter your maximum budget"
-                          value={userBudget}
-                          onChange={(e) => setUserBudget(e.target.value)}
-                          className="h-12 pl-10 border-2 border-blue-300 bg-white"
-                        />
-                      </div>
+                  </div>
+
+                  {/* Budget & Notes */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Max Budget ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.budget}
+                        onChange={(e) => setFormData(prev => ({ ...prev, budget: e.target.value }))}
+                        placeholder="1000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Notes</label>
+                      <Textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Additional context..."
+                        rows={2}
+                      />
                     </div>
                   </div>
 
-                  <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 mb-6 bg-gray-100 rounded-xl p-1 h-12">
-                      <TabsTrigger value="form" className="text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm">
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Manual Entry
-                      </TabsTrigger>
-                      <TabsTrigger value="url" className="text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm">
-                        <LinkIcon className="w-4 h-4 mr-2" />
-                        URL Parser
-                      </TabsTrigger>
-                      <TabsTrigger value="chat" className="text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm">
-                        <Bot className="w-4 h-4 mr-2" />
-                        AI Strategy Chat
-                      </TabsTrigger>
-                      <TabsTrigger value="image" className="text-sm font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm">
-                        <Image className="w-4 h-4 mr-2" />
-                        Image Analyzer
-                      </TabsTrigger>
-                    </TabsList>
+                  <div className="flex gap-4">
+                    <Button onClick={generateOffer} disabled={isLoading} className="bg-green-600 text-white flex-1">
+                      {isLoading ? 'Generating...' : 'Generate Offer'}
+                    </Button>
+                    <Button onClick={saveNegotiation} variant="outline">
+                      Save
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                    <TabsContent value="form">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Left Panel - Listing Input */}
-                        <div className="space-y-4">
-                          <h3 className="text-lg font-semibold">📝 Listing Details</h3>
-                          <input 
-                            className="w-full p-3 rounded-md border border-gray-300 text-black" 
-                            placeholder="Listing Title"
-                            value={listingTitle}
-                            onChange={(e) => setListingTitle(e.target.value)}
-                          />
-                          <input 
-                            type="number" 
-                            className="w-full p-3 rounded-md border border-gray-300 text-black" 
-                            placeholder="Listing Price ($)"
-                            value={listingPrice}
-                            onChange={(e) => setListingPrice(e.target.value)}
-                          />
-                          <select 
-                            className="w-full p-3 rounded-md border border-gray-300 text-black"
-                            value={platform}
-                            onChange={(e) => setPlatform(e.target.value)}
-                          >
-                            <option value="">Select Platform</option>
-                            <option value="Facebook Marketplace">Facebook Marketplace</option>
-                            <option value="Craigslist">Craigslist</option>
-                            <option value="Zillow">Zillow</option>
-                            <option value="eBay">eBay</option>
-                            <option value="OfferUp">OfferUp</option>
-                          </select>
-                          <textarea 
-                            className="w-full p-3 rounded-md border border-gray-300 text-black" 
-                            rows={3} 
-                            placeholder="Extra Notes or Seller Info (Optional)"
-                            value={extraNotes}
-                            onChange={(e) => setExtraNotes(e.target.value)}
-                          />
-                          <button 
-                            onClick={handleGenerateOffer}
-                            disabled={isLoading || !selectedTone || !userBudget}
-                            className="w-full bg-green-600 text-white py-3 rounded-lg hover:scale-105 transition-all text-lg font-bold shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isLoading ? (
-                              <>
-                                <div className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                Generating...
-                              </>
-                            ) : (
-                              '🚀 Generate Offer & Message'
-                            )}
-                          </button>
-                        </div>
+            <TabsContent value="url">
+              <Card className="bg-white text-black">
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Listing URL</label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder="https://facebook.com/marketplace/item/..."
+                        className="flex-1"
+                      />
+                      <Button onClick={parseUrl} disabled={isParsingUrl}>
+                        {isParsingUrl ? 'Parsing...' : 'Parse'}
+                      </Button>
+                    </div>
+                  </div>
 
-                        {/* Right Panel - AI Strategy */}
-                        <div className="space-y-4">
-                          <h3 className="text-lg font-semibold">🤖 AI-Generated Strategy</h3>
-                          <div className="border border-dashed border-gray-300 rounded-lg p-6 h-[300px] overflow-y-auto">
-                            {generatedOffer && generatedMessage ? (
-                              <div className="space-y-4">
-                                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                  <h4 className="font-bold text-green-800 mb-2">Suggested Offer:</h4>
-                                  <div className="text-2xl font-bold text-green-600">${generatedOffer}</div>
-                                  {listingPrice && (
-                                    <div className="text-sm text-green-700 mt-1">
-                                      Save ${(parseFloat(listingPrice) - parseFloat(generatedOffer)).toLocaleString()} 
-                                      ({Math.round(((parseFloat(listingPrice) - parseFloat(generatedOffer)) / parseFloat(listingPrice)) * 100)}% off)
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                  <h4 className="font-bold text-blue-800 mb-2">Negotiation Message:</h4>
-                                  <p className="text-sm text-blue-700 leading-relaxed">{generatedMessage}</p>
-                                  <button 
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(generatedMessage);
-                                      toast({
-                                        title: "Copied!",
-                                        description: "Message copied to clipboard.",
-                                      });
-                                    }}
-                                    className="mt-2 bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-700 transition-colors"
-                                  >
-                                    Copy Message
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center h-full text-gray-500 text-sm text-center">
-                                Fill in the listing details, select tone and budget to see your personalized negotiation strategy.
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                  {parsedData && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <h3 className="font-bold text-green-800 mb-2">Parsed Successfully!</h3>
+                        <p><strong>Title:</strong> {parsedData.title}</p>
+                        <p><strong>Price:</strong> ${parsedData.price}</p>
+                        <p><strong>Platform:</strong> {parsedData.platform}</p>
                       </div>
-                    </TabsContent>
 
-                    <TabsContent value="url">
-                      <div className="space-y-6">
-                        <div className="max-w-2xl mx-auto space-y-6">
-                          <h3 className="text-xl font-bold text-center">Smart URL Parser</h3>
-                          <div className="space-y-4">
-                            <input
-                              type="url"
-                              placeholder="https://facebook.com/marketplace/item/... or any listing URL"
-                              value={url}
-                              onChange={(e) => setUrl(e.target.value)}
-                              className="w-full p-4 rounded-lg border border-gray-300 text-black text-lg"
-                            />
-                            <button
-                              onClick={handleParseUrl}
-                              disabled={isParsingUrl || !url}
-                              className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition-all text-lg font-bold disabled:opacity-50"
-                            >
-                              {isParsingUrl ? (
-                                <>
-                                  <div className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                  Parsing URL...
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-5 h-5 mr-2 inline" />
-                                  Parse Listing Information
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-
-                        {urlParsedData && (
-                          <div className="grid md:grid-cols-2 gap-6">
-                            <div className="bg-green-50 p-6 rounded-xl border border-green-200">
-                              <h4 className="text-lg font-bold text-green-800 mb-4">Parsed Information</h4>
-                              <div className="space-y-2 text-green-700">
-                                <p><strong>Title:</strong> {urlParsedData.title}</p>
-                                <p><strong>Price:</strong> ${urlParsedData.price}</p>
-                                <p><strong>Platform:</strong> {urlParsedData.platform}</p>
-                                <p><strong>Description:</strong> {urlParsedData.description}</p>
-                              </div>
+                      <div>
+                        <h4 className="font-bold mb-2">Better Deals Found</h4>
+                        <div className="space-y-2">
+                          {betterDeals.map((deal, i) => (
+                            <div key={i} className="flex justify-between items-center p-2 bg-gray-100 rounded">
+                              <span>{deal.title}</span>
+                              <span className="text-green-600 font-bold">Save {deal.savings}</span>
                             </div>
-                            <BetterDeals
-                              searchQuery={urlParsedData.title}
-                              category={selectedCategory}
-                              currentPrice={parseFloat(urlParsedData.price)}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="chat">
-                      <div className="grid lg:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <h3 className="text-xl font-bold">💬 AI Strategy Assistant</h3>
-                          <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
-                            {aiChatMessages.length === 0 ? (
-                              <div className="text-center text-gray-500 py-8">
-                                <Bot className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                <p>Ask me anything about your negotiation strategy!</p>
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                {aiChatMessages.map((message) => (
-                                  <div key={message.id} className={`p-3 rounded-lg ${
-                                    message.type === 'ai' 
-                                      ? 'bg-blue-100 text-blue-900 ml-4' 
-                                      : 'bg-gray-200 text-gray-900 mr-4'
-                                  }`}>
-                                    <div className="font-bold text-xs mb-1">
-                                      {message.type === 'ai' ? '🤖 AI Assistant' : '👤 You'}
-                                    </div>
-                                    <p className="text-sm">{message.content}</p>
-                                    {message.type === 'ai' && (
-                                      <button
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(message.content);
-                                          toast({ title: "Copied!", description: "Message copied to clipboard." });
-                                        }}
-                                        className="mt-2 text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
-                                      >
-                                        <Copy className="w-3 h-3 mr-1 inline" />
-                                        Copy
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                                {isAiChatLoading && (
-                                  <div className="bg-blue-100 text-blue-900 ml-4 p-3 rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-4 h-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
-                                      AI is thinking...
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Ask about negotiation strategy, market analysis, or get advice..."
-                              value={aiChatInput}
-                              onChange={(e) => setAiChatInput(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && handleAiChatMessage()}
-                              className="flex-1 p-3 rounded-lg border border-gray-300 text-black"
-                            />
-                            <button
-                              onClick={handleAiChatMessage}
-                              disabled={!aiChatInput.trim() || isAiChatLoading}
-                              className="bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <h3 className="text-xl font-bold">💡 Quick Tips</h3>
-                          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                            <h4 className="font-bold text-yellow-800 mb-2">Try asking:</h4>
-                            <ul className="text-sm text-yellow-700 space-y-1">
-                              <li>• "How should I respond if they counter-offer?"</li>
-                              <li>• "What's the best time to send my message?"</li>
-                              <li>• "How can I justify my lower offer?"</li>
-                              <li>• "What if they seem uninterested?"</li>
-                            </ul>
-                          </div>
+                          ))}
                         </div>
                       </div>
-                    </TabsContent>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                    <TabsContent value="image">
-                      <div className="space-y-6">
-                        <div className="grid lg:grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <h3 className="text-xl font-bold">Image Analyzer</h3>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                              {uploadedImage ? (
-                                <div className="space-y-4">
-                                  <img src={uploadedImage} alt="Uploaded" className="max-w-full h-48 mx-auto rounded-lg" />
-                                  <p className="text-green-600 font-medium">Image uploaded successfully!</p>
-                                </div>
-                              ) : (
-                                <div className="space-y-4">
-                                  <Upload className="w-12 h-12 text-gray-400 mx-auto" />
-                                  <p className="text-gray-600">Upload a conversation screenshot</p>
-                                </div>
-                              )}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                                className="hidden"
-                                id="image-upload"
-                              />
-                              <label
-                                htmlFor="image-upload"
-                                className="inline-block mt-4 bg-gray-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors"
-                              >
-                                Choose Image
-                              </label>
-                            </div>
-                            <button
-                              onClick={analyzeImage}
-                              disabled={isAnalyzing || !uploadedImage}
-                              className="w-full bg-pink-600 text-white py-3 rounded-lg hover:bg-pink-700 transition-all font-bold disabled:opacity-50"
-                            >
-                              {isAnalyzing ? (
-                                <>
-                                  <div className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                  Analyzing...
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="w-4 h-4 mr-2 inline" />
-                                  Analyze Conversation
-                                </>
-                              )}
-                            </button>
+            <TabsContent value="chat">
+              <Card className="bg-white text-black">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <h3 className="font-bold">AI Strategy Assistant</h3>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
+                      {currentNegotiation.messages.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">
+                          <Bot className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                          <p>Ask me anything about your negotiation strategy!</p>
+                          <div className="mt-4 space-y-1 text-sm">
+                            <p>• "What's a good opening offer?"</p>
+                            <p>• "How should I respond to their counter?"</p>
+                            <p>• "What's the best time to negotiate?"</p>
                           </div>
-                          <div className="space-y-4">
-                            <h3 className="text-xl font-bold">Analysis Results</h3>
-                            <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
-                              {imageAnalysisResult ? (
-                                <div className="space-y-4">
-                                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                    <h4 className="font-bold text-blue-800">Sentiment: {imageAnalysisResult.sentiment}</h4>
-                                    <p className="text-sm text-blue-700">Price Flexibility: {imageAnalysisResult.priceFlexibility}</p>
-                                  </div>
-                                  <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                                    <h4 className="font-bold text-green-800">Suggested Offer: ${imageAnalysisResult.suggestedOffer}</h4>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <h4 className="font-bold">Key Insights:</h4>
-                                    {imageAnalysisResult.insights.map((insight: string, index: number) => (
-                                      <p key={index} className="text-sm text-gray-700">• {insight}</p>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-center text-gray-500 py-8">
-                                  Upload and analyze an image to see AI insights
-                                </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {currentNegotiation.messages.map(msg => (
+                            <div key={msg.id} className={`p-3 rounded-lg ${
+                              msg.type === 'ai' ? 'bg-blue-100' : 'bg-gray-200'
+                            }`}>
+                              <div className="font-bold text-xs mb-1">
+                                {msg.type === 'ai' ? '🤖 AI Assistant' : '👤 You'}
+                              </div>
+                              <p className="text-sm">{msg.content}</p>
+                              {msg.type === 'ai' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(msg.content);
+                                    toast({ title: "Copied!", description: "Message copied to clipboard." });
+                                  }}
+                                  className="mt-2 text-xs"
+                                >
+                                  <Copy className="w-3 h-3 mr-1" />
+                                  Copy
+                                </Button>
                               )}
                             </div>
-                          </div>
+                          ))}
                         </div>
+                      )}
+                    </div>
 
-                        {imageAnalysisResult && (
-                          <BetterDeals
-                            searchQuery={listingTitle || "Similar items"}
-                            category={selectedCategory}
-                            currentPrice={parseFloat(listingPrice) || 1000}
-                          />
-                        )}
+                    <div className="flex gap-2">
+                      <Input
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        placeholder="Ask about negotiation strategy..."
+                        onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                      />
+                      <Button onClick={sendChatMessage} disabled={isChatLoading}>
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="image">
+              <Card className="bg-white text-black">
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Upload Conversation Screenshot</label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                      {uploadedImage ? (
+                        <div className="space-y-4">
+                          <img src={uploadedImage} alt="Uploaded" className="max-w-full h-48 mx-auto rounded-lg" />
+                          <p className="text-green-600 font-medium">Image uploaded successfully!</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                          <p className="text-gray-600">Upload a conversation screenshot</p>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label htmlFor="image-upload" className="inline-block mt-4 bg-gray-600 text-white px-4 py-2 rounded-lg cursor-pointer">
+                        Choose Image
+                      </label>
+                    </div>
+                  </div>
+
+                  <Button onClick={analyzeImage} disabled={isAnalyzing || !uploadedImage} className="w-full">
+                    {isAnalyzing ? 'Analyzing...' : 'Analyze Conversation'}
+                  </Button>
+
+                  {analysisResult && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <h3 className="font-bold text-blue-800 mb-2">Analysis Results</h3>
+                        <p><strong>Sentiment:</strong> {analysisResult.sentiment}</p>
+                        <p><strong>Price Flexibility:</strong> {analysisResult.priceFlexibility}</p>
+                        <p><strong>Urgency:</strong> {analysisResult.urgency}</p>
                       </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+
+                      <div>
+                        <h4 className="font-bold mb-2">Better Deals Found</h4>
+                        <div className="space-y-2">
+                          {betterDeals.map((deal, i) => (
+                            <div key={i} className="flex justify-between items-center p-2 bg-gray-100 rounded">
+                              <span>{deal.title}</span>
+                              <span className="text-green-600 font-bold">Save {deal.savings}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
+
+      {activeTab === 'active' && (
+        <Card className="bg-white text-black">
+          <CardHeader>
+            <CardTitle>Active Negotiations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {negotiations.filter(n => n.status === 'active').length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 mb-4">No active negotiations</p>
+                <Button onClick={startNewNegotiation} className="bg-green-600 text-white">
+                  Start New Negotiation
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {negotiations.filter(n => n.status === 'active').map(negotiation => (
+                  <div key={negotiation.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-bold">{negotiation.title || 'Untitled'}</h3>
+                      <p className="text-sm text-gray-600">
+                        {negotiation.category} • ${negotiation.originalPrice.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => {
+                          setCurrentNegotiation(negotiation);
+                          setActiveTab('negotiate');
+                        }}
+                        size="sm"
+                      >
+                        Continue
+                      </Button>
+                      <Button
+                        onClick={() => setNegotiations(prev => prev.filter(n => n.id !== negotiation.id))}
+                        variant="destructive"
+                        size="sm"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'history' && (
-        <section className="bg-white text-black p-6 rounded-xl shadow-xl">
-          <h3 className="text-2xl font-bold mb-6">🔁 Negotiation History</h3>
-          <div className="space-y-4">
-            {completedDeals.map((deal) => (
-              <div key={deal.id} className="bg-gray-50 p-4 rounded-lg border">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-bold">{deal.title}</h4>
-                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-sm font-medium">Completed</span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2">{deal.platform} • Completed {deal.completedAt.toLocaleDateString()}</p>
-                <div className="flex gap-4 text-sm">
-                  <span>Original: <span className="line-through">${deal.originalPrice.toLocaleString()}</span></span>
-                  <span>Final: <span className="text-green-600 font-bold">${deal.finalPrice.toLocaleString()}</span></span>
-                  <span className="text-green-600 font-bold">Saved ${deal.savings.toLocaleString()} ({deal.savingsPercentage}%)</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <Card className="bg-white text-black">
+          <CardHeader>
+            <CardTitle>Negotiation History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8 text-gray-500">
+              <p>No completed negotiations yet</p>
+            </div>
+          </CardContent>
+        </Card>
       )}
-
-      {activeTab === 'analytics' && (
-        <section className="bg-white text-black p-6 rounded-xl shadow-xl">
-          <h3 className="text-2xl font-bold mb-6">📊 Analytics Dashboard</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold">Savings by Category</h4>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">🚗 Cars</span>
-                  <span className="font-bold text-green-600">$2,500</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">💻 Electronics</span>
-                  <span className="font-bold text-green-600">$250</span>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold">Success Metrics</h4>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Success Rate</span>
-                  <span className="font-bold text-blue-600">78%</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Avg. Response Time</span>
-                  <span className="font-bold text-blue-600">2.3 hours</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Deal Completion Dialog */}
-      <Dialog open={showDealDialog} onOpenChange={setShowDealDialog}>
-        <DialogContent className="bg-white text-black max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-gray-900">
-              Deal Completion
-            </DialogTitle>
-            <DialogDescription className="text-gray-700">
-              Did you successfully close this deal?
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6 pt-4">
-            <div className="flex gap-4">
-              <Button
-                onClick={() => setDealClosed(true)}
-                className={`flex-1 h-12 font-bold transition-all duration-300 ${
-                  dealClosed 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Yes, Deal Closed! 🎉
-              </Button>
-              <Button
-                onClick={() => setDealClosed(false)}
-                className={`flex-1 h-12 font-bold transition-all duration-300 ${
-                  !dealClosed 
-                    ? 'bg-gray-600 text-white' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                No, Just Closing
-              </Button>
-            </div>
-
-            {dealClosed && (
-              <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                <Label htmlFor="finalPrice" className="text-lg font-bold text-green-800">
-                  What was the final price?
-                </Label>
-                <Input
-                  id="finalPrice"
-                  type="number"
-                  placeholder="Enter final price"
-                  value={finalPrice}
-                  onChange={(e) => setFinalPrice(e.target.value)}
-                  className="h-12 text-lg border-2 border-green-300 focus:border-green-500 bg-white text-gray-900"
-                />
-              </div>
-            )}
-
-            <div className="flex gap-4 pt-4">
-              <Button
-                onClick={() => setShowDealDialog(false)}
-                variant="outline"
-                className="flex-1 h-12 font-bold border-2 border-gray-300 text-gray-700"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleDealCompletion}
-                className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold"
-              >
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </main>
+    </div>
   );
 };
 
