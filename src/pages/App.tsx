@@ -527,7 +527,7 @@ const AppPage = () => {
                     <h3 className="font-bold">AI Strategy Assistant</h3>
                     
                     <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
-                      {currentNegotiation.messages.length === 0 ? (
+                      {currentNegotiation?.messages?.length === 0 ? (
                         <div className="text-center text-gray-500 py-8">
                           <Bot className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                           <p>Ask me anything about your negotiation strategy!</p>
@@ -539,7 +539,7 @@ const AppPage = () => {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {currentNegotiation.messages.map(msg => (
+                          {currentNegotiation?.messages?.map(msg => (
                             <div key={msg.id} className={`p-3 rounded-lg ${
                               msg.type === 'ai' ? 'bg-blue-100' : 'bg-gray-200'
                             }`}>
