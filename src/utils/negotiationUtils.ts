@@ -56,7 +56,8 @@ export const generateNegotiationMessage = async (
   offer: number, 
   platform: string, 
   notes: string, 
-  category?: string
+  category?: string,
+  tone?: string
 ): Promise<string> => {
   const prompt = `Create a polite, confident negotiation message for the following:
   - Item: ${title}
@@ -64,11 +65,13 @@ export const generateNegotiationMessage = async (
   - Original Price: $${originalPrice}
   - My Offer: $${offer}
   - Platform: ${platform}
+  - Tone: ${tone || 'professional'}
   - Additional Context: ${notes}
   
   Guidelines:
   - Be respectful but confident
   - Use category-specific language and approach
+  - Adapt tone based on the selected tone preference
   - Use phrases like "Would you consider," "Based on the market," or "Happy to move forward if we can agree"
   - Keep it concise (2-3 sentences)
   - Sound professional but friendly
@@ -80,35 +83,70 @@ export const generateNegotiationMessage = async (
     // This is a placeholder for GPT-4 integration
     console.log('Generating message with prompt:', prompt);
     
-    // Category-specific message templates
-    const templates = {
-      'real-estate': [
-        `Hi! I'm very interested in your property at ${title}. I have pre-approval for financing and can close quickly. Based on recent comparables in the area, would you consider $${offer}? I'm ready to move forward immediately if we can agree on this price.`,
-        `Hello! Your property looks perfect for what I'm looking for. I'm a qualified buyer with financing already arranged. Given the current market conditions, would you be open to $${offer}? I can provide proof of funds and close on your timeline.`,
-        `Hi there! I'm interested in purchasing your property. I've been pre-approved and can offer a quick, smooth closing. Based on my research of the area, would you consider accepting $${offer}? Happy to discuss terms that work for both of us.`
-      ],
-      'cars': [
-        `Hi! I'm very interested in your ${title}. I've been looking for exactly this model and I'm ready to purchase immediately. Based on current market values and the condition, would you consider $${offer}? I can come see it this week and complete the purchase with cash/financing.`,
-        `Hello! Your ${title} looks great and exactly what I've been searching for. I have financing pre-approved and can complete the purchase quickly. Given the mileage and market conditions, would you be open to $${offer}? I'm available to view it at your convenience.`,
-        `Hi there! I'm interested in your ${title}. I'm a serious buyer with cash/financing ready. Based on similar vehicles in the area, would you consider $${offer}? I can arrange to see it this weekend and finalize everything if we can agree on the price.`
-      ],
-      'electronics': [
-        `Hi! I'm very interested in your ${title}. I've been looking for this exact model and I'm ready to purchase today. Based on current market prices, would you consider $${offer}? I can pick it up immediately with cash if we can agree on this price.`,
-        `Hello! Your ${title} is exactly what I need. I'm ready to buy today and can pick it up at your convenience. Given the current retail prices, would you be open to $${offer}? Happy to complete the transaction quickly.`,
-        `Hi there! I'm interested in purchasing your ${title}. I'm a serious buyer and can pick it up today with cash. Based on similar listings, would you consider accepting $${offer}? I can come get it whenever works for you.`
-      ],
-      'furniture': [
-        `Hi! I'm very interested in your ${title}. I'm moving into a new place and this would be perfect. Based on similar pieces I've seen, would you consider $${offer}? I can arrange pickup this week and handle all the moving logistics.`,
-        `Hello! Your ${title} looks exactly like what I've been searching for. I'm ready to purchase and can handle pickup/delivery. Given the current market, would you be open to $${offer}? I can come get it at your convenience.`,
-        `Hi there! I'm interested in your ${title}. I have a truck and can pick it up immediately. Based on similar furniture listings, would you consider $${offer}? Happy to work with your schedule for pickup.`
-      ]
+    // Tone-specific message variations
+    const toneVariations = {
+      'friendly': {
+        'real-estate': [
+          `Hi there! I absolutely love your property at ${title}. I'm a pre-qualified buyer and would love to make this work. Based on recent sales in the area, would you be open to considering $${offer}? I'm excited to move forward quickly if we can find common ground! 😊`,
+          `Hello! Your property looks amazing and exactly what my family has been searching for. I have financing ready and can close fast. Given the current market, would $${offer} work for you? I'd be thrilled to discuss this further!`
+        ],
+        'cars': [
+          `Hi! I'm really excited about your ${title} - it looks perfect for what I need! I've been searching for this exact model. Based on similar cars I've seen, would you consider $${offer}? I'm ready to come check it out this week! 🚗`,
+          `Hello! Your ${title} caught my eye immediately. I'm a serious buyer with financing ready. Would you be open to $${offer}? I'd love to schedule a viewing soon!`
+        ],
+        'electronics': [
+          `Hi! Your ${title} is exactly what I've been looking for! I'm ready to pick it up today with cash. Based on current prices, would you consider $${offer}? Thanks so much! 📱`,
+          `Hello! I'm very interested in your ${title}. Would you be open to $${offer}? I can come get it whenever works best for you!`
+        ]
+      },
+      'professional': {
+        'real-estate': [
+          `Good day. I am writing to express my interest in your property listed at ${title}. As a pre-qualified buyer, I am prepared to proceed expeditiously. Based on current market analysis, I would like to propose an offer of $${offer}. I am available to discuss terms at your convenience.`,
+          `Dear Seller, I am interested in purchasing your property. I have secured financing and can accommodate your preferred closing timeline. Given recent comparable sales, would you consider an offer of $${offer}?`
+        ],
+        'cars': [
+          `Good day. I am interested in your ${title}. I have financing pre-approved and am prepared to complete the transaction promptly. Based on current market values, would you consider $${offer}? I am available for inspection at your convenience.`,
+          `Hello. I would like to inquire about your ${title}. I am a qualified buyer ready to proceed. Would you be amenable to an offer of $${offer}?`
+        ],
+        'electronics': [
+          `Good day. I am interested in purchasing your ${title}. I am prepared to complete the transaction immediately upon agreement. Based on current market pricing, would you consider $${offer}?`,
+          `Hello. I would like to make an offer on your ${title}. I can arrange immediate pickup and payment. Would $${offer} be acceptable?`
+        ]
+      },
+      'confident': {
+        'real-estate': [
+          `I'm very interested in your property at ${title}. I'm a cash buyer with proof of funds ready. The market data supports an offer of $${offer} for this property. I can close in 15 days. Let me know if you'd like to move forward.`,
+          `Your property fits exactly what I'm looking for. I have financing locked and can close quickly. Based on recent comps, I'm offering $${offer}. This is a strong offer in today's market.`
+        ],
+        'cars': [
+          `I want your ${title}. I've done my research and know the market well. My offer is $${offer} - this is fair based on current values and condition. I have cash ready and can close this week.`,
+          `Your ${title} is exactly what I need. I'm offering $${offer} based on market analysis. I'm ready to buy today if you accept.`
+        ],
+        'electronics': [
+          `I'll take your ${title} for $${offer}. This is a fair market price and I can pick it up today with cash. Let me know if you want to close this deal.`,
+          `I'm offering $${offer} for your ${title}. I know the market and this is a solid offer. Cash in hand, can pick up immediately.`
+        ]
+      },
+      'humble': {
+        'real-estate': [
+          `I hope you're doing well. I'm very interested in your beautiful property at ${title}. I understand you probably have many interested buyers. If you would consider $${offer}, I would be incredibly grateful. I'm pre-qualified and can work with your timeline.`,
+          `Thank you for listing such a lovely property. I would be honored to purchase your home. Would you please consider an offer of $${offer}? I'm flexible on terms and timing.`
+        ],
+        'cars': [
+          `I hope I'm not bothering you. Your ${title} looks absolutely perfect for my needs. I would be very grateful if you would consider $${offer}. I promise to take excellent care of it.`,
+          `Thank you for your time. I'm very interested in your ${title}. Would you please consider $${offer}? I understand if it's not enough, but I thought I'd ask respectfully.`
+        ],
+        'electronics': [
+          `I hope you don't mind me reaching out. Your ${title} would be perfect for my needs. Would you please consider $${offer}? I would really appreciate it and can pick up at your convenience.`,
+          `Thank you for listing your ${title}. I would be very grateful if you would consider $${offer}. I understand if you need more, but I thought I'd ask politely.`
+        ]
+      }
     };
 
-    const categoryTemplates = templates[category as keyof typeof templates] || [
-      `Hi! I'm very interested in your ${title}. Based on similar listings I've seen, would you consider $${offer}? I'm ready to pick it up/move forward today if we can agree on this price.`,
-      `Hello! Your ${title} looks great. I've been researching the market and wondering if you'd be open to $${offer}? Happy to arrange pickup at your convenience if this works for you.`,
-      `Hi there! I'm interested in purchasing your ${title}. Would you consider accepting $${offer}? I'm a serious buyer and can complete the transaction quickly if we can agree on this.`
-    ];
+    const selectedTone = tone || 'professional';
+    const categoryTemplates = toneVariations[selectedTone as keyof typeof toneVariations]?.[category as keyof typeof toneVariations['professional']] || 
+                             toneVariations[selectedTone as keyof typeof toneVariations]?.['electronics'] ||
+                             toneVariations['professional']['electronics'];
     
     return categoryTemplates[Math.floor(Math.random() * categoryTemplates.length)];
   } catch (error) {
