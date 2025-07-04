@@ -395,7 +395,7 @@ const AppPage = () => {
                       <Input
                         value={formData.title}
                         onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                        placeholder="e.g., MacBook Pro 13\""
+                        placeholder='e.g., MacBook Pro 13"'
                       />
                     </div>
                     <div>
